@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Flappy Bird with Friend</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;font-family:Arial,sans-serif;}
+body{display:flex;justify-content:center;align-items:center;height:100vh;background:linear-gradient(to bottom,#70c5ce,#5dade2);overflow:hidden;}
+#gameContainer{position:relative;width:400px;height:600px;border:3px solid #333;border-radius:10px;overflow:hidden;}
+canvas{display:block;}
+#score{position:absolute;top:10px;left:50%;transform:translateX(-50%);font-size:32px;font-weight:bold;color:white;text-shadow:2px 2px #000;z-index:2;}
+#startScreen,#gameOverScreen{position:absolute;width:100%;height:100%;background:rgba(0,0,0,0.5);display:flex;flex-direction:column;justify-content:center;align-items:center;color:white;text-align:center;z-index:3;display:none;}
+#startScreen.active,#gameOverScreen.active{display:flex;}
+button{padding:10px 20px;font-size:20px;cursor:pointer;border:none;border-radius:5px;background:#f39c12;color:white;margin-top:10px;}
+</style>
+</head>
+<body>
+<div id="gameContainer">
+<canvas id="gameCanvas"></canvas>
+<div id="score">0</div>
+<div id="startScreen">
+  <h1>Flappy Bird</h1>
+  <p>Press any button to start</p>
+</div>
+<div id="gameOverScreen">
+  <h1>Game Over</h1>
+  <p id="finalScore">Score: 0</p>
+  <button id="restartBtn">Restart</button>
+</div>
+</div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+canvas.width = 400;
+canvas.height = 600;
+
+const scoreEl = document.getElementById('score');
+const startScreen = document.getElementById('startScreen');
+const gameOverScreen = document.getElementById('gameOverScreen');
+const finalScoreEl = document.getElementById('finalScore');
+const restartBtn = document.getElementById('restartBtn');
+
+// --- Replace with your uploaded image filename ---
+const birdImg = new Image();
+birdImg.src = 'FACE IMAGE.jpg'; // <-- replace with your image file in the repo
+
+let bird = {x:80, y:300, radius:22, gravity:0.6, lift:-10, velocity:0, rotation:0};
+let pipeGap = bird.radius * 10; // gap scales with bird size
+let pipes = [], pipeWidth = 60, frameCount = 0, score = 0, gameRunning = false, speed = 2;
+let particles = [];
+
+document.addEventListener('keydown', e => { if(e.code==='Space') flap(); });
+document.addEventListener('click', flap);
+document.addEventListener('touchstart', flap);
+restartBtn.addEventListener('click', ()=>{ resetGame(); startGame(); });
+startScreen.classList.add('active');
+
+function flap(){ 
+  if(!gameRunning) startGame(); 
+  bird.velocity = bird.lift; 
+}
+
+function startGame(){ 
+  gameRunning = true; 
+  startScreen.classList.remove('active'); 
+  pipes=[]; score=0; bird.y=300; bird.velocity=0; frameCount=0; speed=2; particles=[]; 
+  loop(); 
+}
+
+function loop(){
+  if(!gameRunning) return;
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  // Background
+  ctx.fillStyle="#70c5ce";
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+
+  frameCount++;
+
+  // Bird physics
+  bird.velocity += bird.gravity;
+  bird.y += bird.velocity;
+  bird.rotation = Math.min((bird.velocity/10)*90,90);
+  drawBird();
+
+  // Pipes
+  if(frameCount % 90 === 0){
+    let pipeTopHeight = Math.random() * (canvas.height - pipeGap - 100) + 50;
+    pipes.push({x:canvas.width, y:pipeTopHeight, passed:false});
+  }
+
+  pipes.forEach((pipe, index) => {
+    pipe.x -= speed; 
+    drawPipe(pipe);
+    if(!pipe.passed && bird.x > pipe.x + pipeWidth){ score++; pipe.passed = true; particles.push({x:bird.x, y:bird.y, size:5, life:20}); }
+    if(bird.x + bird.radius > pipe.x && bird.x - bird.radius < pipe.x + pipeWidth && (bird.y - bird.radius < pipe.y || bird.y + bird.radius > pipe.y + pipeGap)) endGame();
+    if(pipe.x + pipeWidth < 0) pipes.splice(index,1);
+  });
+
+  // Ground & ceiling
+  if(bird.y + bird.radius > canvas.height || bird.y - bird.radius < 0) endGame();
+
+  drawParticles();
+
+  scoreEl.textContent = score;
+
+  if(frameCount % 600 === 0) speed += 0.2;
+
+  requestAnimationFrame(loop);
+}
+
+function drawBird(){
+  ctx.save();
+  ctx.translate(bird.x, bird.y);
+  ctx.rotate((bird.rotation*Math.PI)/180 * 0.3); // reduce tilt
+
+  const imgSize = bird.radius * 2.5; // bigger image
+
+  // Circular clipping mask
+  ctx.beginPath();
+  ctx.arc(0, 0, imgSize/2, 0, Math.PI*2);
+  ctx.closePath();
+  ctx.clip();
+
+  ctx.drawImage(birdImg, -imgSize/2, -imgSize/2, imgSize, imgSize);
+  ctx.restore();
+}
+
+function drawPipe(pipe){
+  ctx.fillStyle="green";
+  ctx.fillRect(pipe.x,0,pipeWidth,pipe.y);
+  ctx.fillRect(pipe.x,pipe.y+pipeGap,pipeWidth,canvas.height-pipe.y-pipeGap);
+}
+
+function drawParticles(){
+  particles.forEach((p,index)=>{
+    ctx.fillStyle=`rgba(255,215,0,${p.life/20})`;
+    ctx.beginPath(); 
+    ctx.arc(p.x,p.y,p.size,0,Math.PI*2); 
+    ctx.fill();
+    p.y -= 1; p.life--;
+    if(p.life <= 0) particles.splice(index,1);
+  });
+}
+
+function endGame(){ 
+  gameRunning=false; 
+  finalScoreEl.textContent = `Score: ${score}`; 
+  gameOverScreen.classList.add('active'); 
+}
+
+function resetGame(){ 
+  gameOverScreen.classList.remove('active'); 
+  bird.y = 300; bird.velocity = 0; pipes = []; score = 0; particles = []; speed = 2;
+}
+</script>
+</body>
+</html>
+
